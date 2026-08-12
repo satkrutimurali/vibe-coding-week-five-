@@ -9,29 +9,62 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink: #16211C;
-    --ink-2: #1E2B23;
-    --ink-line: #33453A;
-    --paper: #F4EFE4;
-    --paper-2: #EAE2CE;
-    --line: #C9BFA8;
-    --text-dark: #23281F;
-    --text-soft: #5B6355;
-    --nutrition: #C97A3D;
-    --nutrition-soft: #F0DCC5;
-    --workout: #3D6B8C;
-    --workout-soft: #D6E4EC;
-    --meal: #6E7F3D;
-    --meal-soft: #E3E8CF;
+    --ink: #dff4ff;
+    --ink-2: #edf9ff;
+    --ink-line: #b8d9ee;
+    --paper: #f5fbff;
+    --paper-2: #dfeefb;
+    --line: #bfd9ef;
+    --text-dark: #1a2e3d;
+    --text-soft: #49657a;
+    --nutrition: #d77f48;
+    --nutrition-soft: #f8e0d1;
+    --workout: #3b7db7;
+    --workout-soft: #dfeffc;
+    --meal: #6c9d5a;
+    --meal-soft: #e4f1dc;
     --warn: #B33F3F;
-    --off-white: #FBF9F3;
+    --off-white: #fcfeff;
   }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; height: 100%;
-    background: var(--ink);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.36), rgba(255,255,255,0.06)),
+      radial-gradient(circle at 15% 20%, rgba(255,255,255,0.75), transparent 18%),
+      radial-gradient(circle at 70% 18%, rgba(168, 214, 255, 0.9), transparent 22%),
+      radial-gradient(circle at 42% 80%, rgba(200, 233, 255, 0.9), transparent 20%),
+      var(--ink);
     color: var(--text-dark);
     font-family: 'IBM Plex Sans', sans-serif;
+    position: relative;
+    overflow: hidden;
+  }
+  body::before,
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.48;
+  }
+  body::before {
+    background-image:
+      linear-gradient(90deg, transparent 0 72%, rgba(91, 136, 164, 0.12) 72% 74%, transparent 74% 100%),
+      linear-gradient(transparent 0 70%, rgba(91, 136, 164, 0.12) 70% 72%, transparent 72% 100%),
+      radial-gradient(circle at 12% 22%, rgba(255,255,255,0.75) 0 13px, transparent 13px),
+      radial-gradient(circle at 78% 48%, rgba(255,255,255,0.72) 0 12px, transparent 12px),
+      radial-gradient(circle at 45% 80%, rgba(255,255,255,0.7) 0 14px, transparent 14px),
+      linear-gradient(120deg, transparent 0 56%, rgba(98, 148, 187, 0.16) 56% 58%, transparent 58% 100%);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+    filter: blur(0.4px);
+  }
+  body::after {
+    background-image:
+      radial-gradient(circle at 20% 28%, rgba(123, 174, 214, 0.26) 0 30px, transparent 31px),
+      radial-gradient(circle at 72% 18%, rgba(123, 174, 214, 0.24) 0 26px, transparent 27px),
+      radial-gradient(circle at 60% 72%, rgba(123, 174, 214, 0.22) 0 38px, transparent 39px),
+      linear-gradient(90deg, transparent 0 85%, rgba(110, 155, 192, 0.15) 85% 87%, transparent 87% 100%);
   }
   h1, h2, h3, .display { font-family: 'Fraunces', serif; }
   .mono { font-family: 'IBM Plex Mono', monospace; }
@@ -43,17 +76,21 @@
     grid-template-columns: 280px minmax(0,1fr) 320px;
     gap: 10px;
     padding: 10px;
+    position: relative;
+    z-index: 1;
   }
   #app.show { display: grid; }
 
   .column {
-    background: var(--ink-2);
-    border: 1px solid var(--ink-line);
-    border-radius: 8px;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(91, 136, 164, 0.38);
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    box-shadow: 0 10px 25px rgba(40, 82, 115, 0.08);
   }
   .column-header {
     padding: 14px 16px 10px;
@@ -165,6 +202,19 @@
   .msg.agent.workout .bubble { border-left: 3px solid var(--workout); }
   .msg.agent.meal .bubble { border-left: 3px solid var(--meal); }
   .msg.agent.system .bubble { border-left: 3px solid #9BA99C; color: var(--text-soft); font-style: italic; }
+  .edit-msg-btn {
+    align-self: flex-start;
+    margin-top: 6px;
+    background: transparent;
+    color: var(--text-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-size: 10.5px;
+    font-family: 'IBM Plex Mono', monospace;
+    cursor: pointer;
+  }
+  .edit-msg-btn:hover { background: rgba(35, 40, 31, 0.04); }
 
   #chatToolbar {
     display: flex;
@@ -991,7 +1041,22 @@
     div.className = cls;
     const who = role === 'user' ? (profile && profile.name ? profile.name : 'You') : (agentKey && AGENTS[agentKey] ? AGENTS[agentKey].name : 'System');
     div.innerHTML = `<div class="who">${who}</div><div class="bubble"></div>`;
-    div.querySelector('.bubble').textContent = text;
+    const bubble = div.querySelector('.bubble');
+    bubble.textContent = text;
+
+    if (role === 'agent' || role === 'user') {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'edit-msg-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', () => {
+        chatInput.value = text;
+        chatInput.focus();
+        chatInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      div.appendChild(editBtn);
+    }
+
     chatLog.appendChild(div);
     scrollChatToBottom(false);
     renderChatHistory();
