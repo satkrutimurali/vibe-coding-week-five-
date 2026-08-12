@@ -1204,6 +1204,7 @@
 
     let handoff = text;
     let previousOutput = '';
+    const agentResponses = [];
 
     for (const key of activeMatches) {
       workflowTrace.push({
@@ -1223,10 +1224,13 @@
       workflowTrace[workflowTrace.length - 1].detail = reply.length > 120 ? reply.slice(0, 117) + '…' : reply;
       renderWorkflowTrace();
 
-      addChatMessage('agent', key, reply);
+      agentResponses.push(reply);
       previousOutput = reply;
       handoff = reply;
     }
+
+    const orchestratedReply = agentResponses.length ? agentResponses[agentResponses.length - 1] : 'I processed the request, but no agent returned a response.';
+    addChatMessage('agent', 'system', orchestratedReply);
 
     workflowTrace[0].status = 'done';
     workflowTrace[0].detail = 'Completed the workflow for ' + activeMatches.map(k => AGENTS[k].name).join(' → ');
