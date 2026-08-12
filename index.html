@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three-Agent Health Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #16211C;
+    --ink-2: #1E2B23;
+    --ink-line: #33453A;
+    --paper: #F4EFE4;
+    --paper-2: #EAE2CE;
+    --line: #C9BFA8;
+    --text-dark: #23281F;
+    --text-soft: #5B6355;
+    --nutrition: #C97A3D;
+    --nutrition-soft: #F0DCC5;
+    --workout: #3D6B8C;
+    --workout-soft: #D6E4EC;
+    --meal: #6E7F3D;
+    --meal-soft: #E3E8CF;
+    --warn: #B33F3F;
+    --off-white: #FBF9F3;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--ink);
+    color: var(--text-dark);
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  h1, h2, h3, .display { font-family: 'Fraunces', serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* ---------- App shell ---------- */
+  #app {
+    display: none;
+    height: 100vh;
+    grid-template-columns: 280px minmax(0,1fr) 320px;
+    gap: 10px;
+    padding: 10px;
+  }
+  #app.show { display: grid; }
+
+  .column {
+    background: var(--ink-2);
+    border: 1px solid var(--ink-line);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .column-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--ink-line);
+    flex-shrink: 0;
+  }
+  .column-header .eyebrow {
+    color: #9BA99C;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .column-header h2 {
+    margin: 3px 0 0;
+    font-size: 18px;
+    color: var(--off-white);
+    font-weight: 600;
+  }
+
+  /* ---------- Left: reasoning log ---------- */
+  #thinkingLog {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .think-entry {
+    border-left: 3px solid var(--line);
+    padding: 6px 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: #C9D2C7;
+    background: rgba(255,255,255,0.02);
+    animation: fadeIn 0.25s ease;
+  }
+  .think-entry .tag {
+    display: block;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+    font-size: 10.5px;
+  }
+  .think-entry.nutrition { border-color: var(--nutrition); }
+  .think-entry.nutrition .tag { color: var(--nutrition); }
+  .think-entry.workout { border-color: var(--workout); }
+  .think-entry.workout .tag { color: var(--workout); }
+  .think-entry.meal { border-color: var(--meal); }
+  .think-entry.meal .tag { color: var(--meal); }
+  .think-entry.system { border-color: #7A8578; }
+  .think-entry.system .tag { color: #9BA99C; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+  #thinkingEmpty { padding: 20px 14px; color: #7A8578; font-size: 12.5px; line-height: 1.6; }
+
+  /* ---------- Middle: chat ---------- */
+  #chatColumn { background: var(--paper); border-color: var(--line); }
+  #chatColumn .column-header { border-bottom-color: var(--line); }
+  #chatColumn .column-header .eyebrow { color: var(--text-soft); }
+  #chatColumn .column-header h2 { color: var(--text-dark); }
+  #chatLog {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg { position: relative; max-width: 82%; display: flex; flex-direction: column; gap: 3px; padding-left: 16px; margin-left: 4px; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.agent { align-self: flex-start; align-items: flex-start; }
+  .msg::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 0;
+    bottom: -12px;
+    width: 2px;
+    background: rgba(35, 40, 31, 0.18);
+  }
+  .msg::after {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: 13px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-dark);
+    border: 2px solid var(--paper);
+  }
+  .msg.user::before { background: rgba(35, 40, 31, 0.14); }
+  .msg.user::after { background: var(--text-dark); }
+  .msg.agent::before { background: rgba(35, 40, 31, 0.24); }
+  .msg.agent::after { background: var(--meal); }
+  .msg .bubble {
+    padding: 10px 13px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .msg.user .bubble { background: var(--text-dark); color: var(--off-white); border-bottom-right-radius: 3px; }
+  .msg.agent .bubble { background: var(--off-white); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+  .msg .who { font-size: 10.5px; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; color: var(--text-soft); }
+  .msg.agent.nutrition .bubble { border-left: 3px solid var(--nutrition); }
+  .msg.agent.workout .bubble { border-left: 3px solid var(--workout); }
+  .msg.agent.meal .bubble { border-left: 3px solid var(--meal); }
+  .msg.agent.system .bubble { border-left: 3px solid #9BA99C; color: var(--text-soft); font-style: italic; }
+
+  #chatToolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px 0;
+    background: var(--paper);
+  }
+  .toolbar-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text-dark);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .toolbar-btn:hover { background: var(--paper-2); }
+  #scrollDownBtn {
+    display: none;
+  }
+  #scrollDownBtn.visible {
+    display: inline-flex;
+  }
+  #chatInputRow {
+    border-top: 1px solid var(--line);
+    padding: 12px;
+    flex-shrink: 0;
+    background: var(--paper);
+  }
+  #suggestRow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .suggest-chip {
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 5px 11px;
+    font-size: 11.5px;
+    color: var(--text-dark);
+    cursor: pointer;
+  }
+  .suggest-chip:hover { background: var(--off-white); }
+  #inputForm { display: flex; gap: 8px; }
+  #chatInput {
+    flex: 1;
+    padding: 11px 13px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    background: var(--off-white);
+    color: var(--text-dark);
+  }
+  #chatInput:focus { outline: 2px solid var(--text-dark); outline-offset: 1px; }
+  #sendBtn {
+    background: var(--text-dark);
+    color: var(--off-white);
+    border: none;
+    border-radius: 8px;
+    padding: 0 18px;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  #sendBtn:hover { background: #3A4232; }
+  #sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---------- Right: agents + profile ---------- */
+  #agentList { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .agent-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--ink-line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .agent-card .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .agent-card .name { display: flex; align-items: center; gap: 8px; }
+  .agent-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .agent-card.nutrition .agent-dot { background: var(--nutrition); }
+  .agent-card.workout .agent-dot { background: var(--workout); }
+  .agent-card.meal .agent-dot { background: var(--meal); }
+  .agent-card.planner .agent-dot { background: #8B5CF6; }
+  .agent-card .name span.title { color: var(--off-white); font-weight: 600; font-size: 13.5px; }
+  .agent-card p { margin: 8px 0 0; color: #9BA99C; font-size: 11.5px; line-height: 1.5; }
+  .agent-card .status { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: 1px; margin-top: 6px; }
+  .agent-card.on .status { color: #8FBF9A; }
+  .agent-card.off .status { color: #C97A7A; }
+  .agent-card.off { opacity: 0.65; }
+
+  #workflowPanel {
+    margin: 0 12px 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--ink-line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  #workflowPanel .eyebrow { color: #9BA99C; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'IBM Plex Mono', monospace; }
+  #workflowTrace {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .workflow-step {
+    border: 1px solid var(--ink-line);
+    border-left: 3px solid #7A8578;
+    border-radius: 6px;
+    padding: 8px 9px;
+    background: rgba(255,255,255,0.02);
+  }
+  .workflow-step.running { border-left-color: var(--workout); }
+  .workflow-step.done { border-left-color: var(--meal); }
+  .workflow-step .step-head { display: flex; justify-content: space-between; gap: 8px; color: var(--off-white); font-size: 11.5px; margin-bottom: 4px; }
+  .workflow-step .step-meta { font-size: 10px; color: #9BA99C; line-height: 1.4; font-family: 'IBM Plex Mono', monospace; }
+  .workflow-step .step-status { font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: #9BA99C; }
+  .workflow-step.running .step-status { color: var(--workout); }
+  .workflow-step.done .step-status { color: var(--meal); }
+  .workflow-empty { font-size: 11.5px; color: #7A8578; line-height: 1.5; }
+
+  .toggle { position: relative; width: 38px; height: 21px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; position: absolute; z-index: 1; }
+  .toggle .track { position: absolute; inset: 0; background: #4A5A4E; border-radius: 20px; transition: background 0.15s; }
+  .toggle .thumb { position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: var(--off-white); transition: transform 0.15s; }
+  .toggle input:checked ~ .track { background: #6FA37D; }
+  .toggle input:checked ~ .thumb { transform: translateX(17px); }
+
+  #profileSummary {
+    margin: 4px 12px 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--ink-line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  #profileSummary .eyebrow { color: #9BA99C; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'IBM Plex Mono', monospace; }
+  #profileSummary dl { margin: 8px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; }
+  #profileSummary dt { color: #9BA99C; }
+  #profileSummary dd { margin: 0; color: var(--off-white); font-family: 'IBM Plex Mono', monospace; text-align: right; }
+  #editProfileBtn {
+    margin-top: 10px; width: 100%;
+    background: transparent; border: 1px solid var(--ink-line); color: #C9D2C7;
+    border-radius: 6px; padding: 7px; font-size: 11.5px; cursor: pointer;
+  }
+  #editProfileBtn:hover { border-color: #6FA37D; color: #6FA37D; }
+
+  #historyPanel {
+    margin: 0 12px 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--ink-line);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  #historyPanel .eyebrow { color: #9BA99C; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'IBM Plex Mono', monospace; }
+  #historyList {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .history-item {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--ink-line);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.02);
+    color: #C9D2C7;
+    padding: 8px 9px;
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .history-item:hover, .history-item.active { border-color: #6FA37D; color: var(--off-white); }
+  .history-item .preview { margin-top: 3px; color: #9BA99C; font-size: 10px; line-height: 1.4; }
+  .history-empty { font-size: 11.5px; color: #7A8578; line-height: 1.5; }
+
+  #progressPanel { margin: 0 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--ink-line); border-radius: 8px; padding: 12px; }
+  #progressPanel .eyebrow { color: #9BA99C; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; font-family: 'IBM Plex Mono', monospace; }
+  .bar-row { margin-top: 9px; }
+  .bar-row .label { display: flex; justify-content: space-between; font-size: 11px; color: #C9D2C7; margin-bottom: 3px; font-family: 'IBM Plex Mono', monospace; }
+  .bar-track { height: 6px; background: #2C3B31; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+  #resetDayBtn {
+    margin-top: 10px; width: 100%;
+    background: transparent; border: 1px solid var(--ink-line); color: #C9D2C7;
+    border-radius: 6px; padding: 7px; font-size: 11.5px; cursor: pointer;
+  }
+  #resetDayBtn:hover { border-color: var(--warn); color: #E08585; }
+
+  /* ---------- Sign-in overlay ---------- */
+  #signInOverlay {
+    position: fixed; inset: 0;
+    background: radial-gradient(circle at 30% 20%, #223226, var(--ink) 65%);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50; padding: 24px;
+  }
+  #signInCard {
+    background: var(--paper);
+    border-radius: 12px;
+    max-width: 560px; width: 100%;
+    padding: 34px 36px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.45);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  #signInCard .eyebrow { color: var(--nutrition); font-size: 11px; letter-spacing: 2px; text-transform: uppercase; font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+  #signInCard h1 { margin: 6px 0 4px; font-size: 28px; color: var(--text-dark); }
+  #signInCard .sub { color: var(--text-soft); font-size: 13.5px; margin: 0 0 22px; line-height: 1.6; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--text-dark); margin-bottom: 5px; letter-spacing: 0.3px; }
+  .field input[type=text], .field input[type=number], .field select, .field textarea {
+    width: 100%; padding: 9px 11px; border-radius: 6px; border: 1px solid var(--line);
+    font-family: 'IBM Plex Sans', sans-serif; font-size: 13.5px; background: var(--off-white); color: var(--text-dark);
+  }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--text-dark); outline-offset: 1px; }
+  .unit-row { display: flex; gap: 8px; }
+  .unit-row input { flex: 1; }
+  .unit-row select { width: 90px; flex-shrink: 0; }
+  #signInForm .full { grid-column: 1 / -1; }
+  #signInSubmit {
+    width: 100%; margin-top: 6px;
+    background: var(--text-dark); color: var(--off-white); border: none;
+    padding: 13px; border-radius: 8px; font-weight: 600; font-size: 14.5px; cursor: pointer;
+  }
+  #signInSubmit:hover { background: #3A4232; }
+  #signInError {
+    display: none;
+    margin-top: 12px;
+    background: #FBE4E0;
+    border: 1px solid var(--warn);
+    color: #7A2020;
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  #signInError.show { display: block; }
+
+  #globalErrorBanner {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 999;
+    background: #B33F3F;
+    color: #fff;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 10px 16px;
+    line-height: 1.5;
+  }
+  #globalErrorBanner.show { display: block; }
+  #globalErrorBanner button {
+    margin-left: 10px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: #fff;
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  #signInDisclaimer { margin-top: 14px; font-size: 10.5px; color: var(--text-soft); line-height: 1.5; }
+  .field-note { font-size: 10.5px; color: var(--text-soft); margin-top: 4px; }
+
+  /* scrollbars */
+  #thinkingLog::-webkit-scrollbar, #chatLog::-webkit-scrollbar, #signInCard::-webkit-scrollbar { width: 8px; }
+  #thinkingLog::-webkit-scrollbar-thumb { background: #33453A; border-radius: 4px; }
+  #chatLog::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: 180px 1fr 260px; height: auto; min-height: 100vh; }
+    .field-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="globalErrorBanner"></div>
+
+  <!-- ===================== SIGN-IN ===================== -->
+  <div id="signInOverlay">
+    <div id="signInCard">
+      <div class="eyebrow">Before you begin</div>
+      <h1>Set up your profile</h1>
+      <p class="sub">Four agents — a nutrition guide, a workout guide, a meal planner, and a long-term planner — use this to work out your daily targets and give grounded answers instead of generic ones. This isn't medical or dietetic advice; it's a general estimate. Talk to a professional for anything specific to your health.</p>
+
+      <form id="signInForm">
+        <div class="field-grid">
+          <div class="field">
+            <label for="fName">Name</label>
+            <input type="text" id="fName" placeholder="What should we call you?">
+          </div>
+          <div class="field">
+            <label for="fSex">Sex</label>
+            <select id="fSex">
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Prefer not to say</option>
+            </select>
+            <div class="field-note">Used only for the BMR/RDA formulas below.</div>
+          </div>
+          <div class="field">
+            <label for="fAge">Age</label>
+            <input type="number" id="fAge" min="14" max="100" placeholder="e.g. 27">
+          </div>
+          <div class="field">
+            <label for="fActivity">Activity level</label>
+            <select id="fActivity">
+              <option value="1.2">Sedentary — little or no exercise</option>
+              <option value="1.375">Light — exercise 1–3 days/week</option>
+              <option value="1.55" selected>Moderate — exercise 3–5 days/week</option>
+              <option value="1.725">Active — exercise 6–7 days/week</option>
+              <option value="1.9">Very active — hard training, physical job</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fHeight">Height</label>
+            <div class="unit-row">
+              <input type="number" id="fHeight" placeholder="e.g. 170">
+              <select id="fHeightUnit">
+                <option value="cm">cm</option>
+                <option value="in">inches</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="fWeight">Weight</label>
+            <div class="unit-row">
+              <input type="number" id="fWeight" placeholder="e.g. 68">
+              <select id="fWeightUnit">
+                <option value="kg">kg</option>
+                <option value="lb">lb</option>
+              </select>
+            </div>
+          </div>
+          <div class="field full">
+            <label for="fGoal">Goal</label>
+            <select id="fGoal">
+              <option value="lose">Lose weight</option>
+              <option value="maintain" selected>Maintain weight</option>
+              <option value="gain">Gain muscle</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label for="fRoutine">Current workout routine</label>
+            <textarea id="fRoutine" placeholder="e.g. I lift 3 days a week (push/pull/legs) and walk most days. Or: I don't currently work out."></textarea>
+          </div>
+        </div>
+        <button type="submit" id="signInSubmit">Enter the console</button>
+        <div id="signInError"></div>
+      </form>
+      <div id="signInDisclaimer">Everything you enter stays in this browser tab only — nothing is uploaded or saved anywhere, and it resets if you reload the page.<br><span class="mono" style="opacity:0.6;">build 2026-08-10-r2</span></div>
+    </div>
+  </div>
+
+  <!-- ===================== MAIN APP ===================== -->
+  <div id="app">
+
+    <!-- LEFT: reasoning log -->
+    <div class="column" id="thinkingColumn">
+      <div class="column-header">
+        <div class="eyebrow">Live process</div>
+        <h2>Agent Reasoning</h2>
+      </div>
+      <div id="thinkingLog">
+        <div id="thinkingEmpty">Ask something in the middle panel. Each active agent will think through it here before answering.</div>
+      </div>
+    </div>
+
+    <!-- MIDDLE: chat -->
+    <div class="column" id="chatColumn">
+      <div class="column-header">
+        <div class="eyebrow" id="chatEyebrow">Console</div>
+        <h2 id="chatHeading">Ask your agents</h2>
+      </div>
+      <div id="chatToolbar">
+        <button id="scrollDownBtn" class="toolbar-btn" type="button">Scroll down</button>
+        <button id="newChatBtn" class="toolbar-btn" type="button">New chat</button>
+      </div>
+      <div id="chatLog"></div>
+      <div id="chatInputRow">
+        <div id="suggestRow">
+          <div class="suggest-chip" data-q="What's my protein target for today?">Protein target?</div>
+          <div class="suggest-chip" data-q="What should my workout be today?">Today's workout?</div>
+          <div class="suggest-chip" data-q="I had 2 eggs, a slice of whole wheat toast, and a banana for breakfast.">Log a meal</div>
+          <div class="suggest-chip" data-q="Which vitamins am I likely missing?">Vitamin gaps?</div>
+        </div>
+        <form id="inputForm">
+          <input type="text" id="chatInput" placeholder="Ask a question or describe a meal…" autocomplete="off">
+          <button type="submit" id="sendBtn">Send</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- RIGHT: agents + profile -->
+    <div class="column" id="rosterColumn">
+      <div class="column-header">
+        <div class="eyebrow">Roster</div>
+        <h2>Your Agents</h2>
+      </div>
+      <div id="agentList"></div>
+      <div id="workflowPanel">
+        <div class="eyebrow">Workflow trace</div>
+        <div id="workflowTrace">
+          <div class="workflow-empty">No workflow yet. Send a message and the active agents will run here in sequence.</div>
+        </div>
+      </div>
+      <div id="historyPanel">
+        <div class="eyebrow">Chat history</div>
+        <div id="historyList"></div>
+      </div>
+      <div id="progressPanel">
+        <div class="eyebrow">Today so far</div>
+        <div class="bar-row">
+          <div class="label"><span>Calories</span><span id="calLabel">0 / 0</span></div>
+          <div class="bar-track"><div class="bar-fill" id="calBar" style="background:var(--nutrition); width:0%;"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="label"><span>Protein</span><span id="proteinLabel">0g / 0g</span></div>
+          <div class="bar-track"><div class="bar-fill" id="proteinBar" style="background:var(--meal); width:0%;"></div></div>
+        </div>
+        <button id="resetDayBtn">Reset today's log</button>
+      </div>
+      <div id="profileSummary">
+        <div class="eyebrow">Profile</div>
+        <dl id="profileDL"></dl>
+        <button id="editProfileBtn">Edit profile</button>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  // Global safety net — if anything throws anywhere on this page, show it
+  // visibly instead of leaving a dead button with no explanation.
+  const BUILD_STAMP = '2026-08-10-r2';
+  window.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('globalErrorBanner');
+    if (el) el.dataset.build = BUILD_STAMP;
+  });
+  window.addEventListener('error', (e) => {
+    const el = document.getElementById('globalErrorBanner');
+    if (!el) return;
+    el.innerHTML = 'Script error: ' + (e.message || 'unknown') + ' (line ' + (e.lineno || '?') + ') — build ' + BUILD_STAMP + ' <button onclick="this.parentElement.classList.remove(\'show\')">Dismiss</button>';
+    el.classList.add('show');
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const el = document.getElementById('globalErrorBanner');
+    if (!el) return;
+    el.innerHTML = 'Script error: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason)) + ' — build ' + BUILD_STAMP + ' <button onclick="this.parentElement.classList.remove(\'show\')">Dismiss</button>';
+    el.classList.add('show');
+  });
+</script>
+<script>
+(function () {
+  // ============================================================
+  // Reference data — standard, published figures (NIH ODS RDAs,
+  // Mifflin-St Jeor BMR). These are general estimates, not
+  // personalized medical or dietetic advice.
+  // ============================================================
+  const RDA = {
+    male:   { vitA: 900, vitC: 90, vitD: 15, vitE: 15, vitK: 120, b12: 2.4, folate: 400, calcium: 1000, iron: 8,  magnesium: 420, potassium: 3400, zinc: 11 },
+    female: { vitA: 700, vitC: 75, vitD: 15, vitE: 15, vitK: 90,  b12: 2.4, folate: 400, calcium: 1000, iron: 18, magnesium: 320, potassium: 2600, zinc: 8  }
+  };
+  RDA.other = {};
+  Object.keys(RDA.male).forEach(k => { RDA.other[k] = Math.round((RDA.male[k] + RDA.female[k]) / 2); });
+
+  const VITAMIN_LABELS = {
+    vitA: 'Vitamin A', vitC: 'Vitamin C', vitD: 'Vitamin D', vitE: 'Vitamin E', vitK: 'Vitamin K',
+    b12: 'Vitamin B12', folate: 'Folate', calcium: 'Calcium', iron: 'Iron', magnesium: 'Magnesium',
+    potassium: 'Potassium', zinc: 'Zinc'
+  };
+  const VITAMIN_UNITS = {
+    vitA: 'mcg', vitC: 'mg', vitD: 'mcg', vitE: 'mg', vitK: 'mcg', b12: 'mcg', folate: 'mcg',
+    calcium: 'mg', iron: 'mg', magnesium: 'mg', potassium: 'mg', zinc: 'mg'
+  };
+
+  const PROTEIN_PER_KG = { '1.2': 1.0, '1.375': 1.2, '1.55': 1.6, '1.725': 1.8, '1.9': 2.0 };
+  const GOAL_ADJUST = { lose: -500, maintain: 0, gain: 350 };
+
+  // Small reference food database — approximate standard values per the
+  // stated serving. Real meals vary by brand, cooking method, and exact
+  // portion, so meal-planner totals are estimates, not lab measurements.
+  const FOOD_DB = [
+    { key: 'chicken breast', unit: 'g', per: 100, cal: 165, protein: 31, carbs: 0, fat: 3.6, vitamins: ['b12'] },
+    { key: 'ground beef', unit: 'g', per: 100, cal: 250, protein: 26, carbs: 0, fat: 17, vitamins: ['b12', 'iron', 'zinc'] },
+    { key: 'salmon', unit: 'g', per: 100, cal: 208, protein: 20, carbs: 0, fat: 13, vitamins: ['vitD', 'b12'] },
+    { key: 'egg', unit: 'each', per: 1, cal: 78, protein: 6.3, carbs: 0.6, fat: 5.3, vitamins: ['vitD', 'b12'] },
+    { key: 'tofu', unit: 'g', per: 100, cal: 144, protein: 17, carbs: 3, fat: 8, vitamins: ['calcium', 'iron'] },
+    { key: 'black beans', unit: 'cup', per: 1, cal: 227, protein: 15, carbs: 41, fat: 0.9, vitamins: ['folate', 'iron'] },
+    { key: 'lentils', unit: 'cup', per: 1, cal: 230, protein: 18, carbs: 40, fat: 0.8, vitamins: ['folate', 'iron'] },
+    { key: 'greek yogurt', unit: 'cup', per: 1, cal: 100, protein: 17, carbs: 6, fat: 0.7, vitamins: ['calcium', 'b12'] },
+    { key: 'milk', unit: 'cup', per: 1, cal: 122, protein: 8, carbs: 12, fat: 5, vitamins: ['calcium', 'vitD', 'b12'] },
+    { key: 'cheddar cheese', unit: 'oz', per: 1, cal: 113, protein: 7, carbs: 0.4, fat: 9, vitamins: ['calcium'] },
+    { key: 'almonds', unit: 'oz', per: 1, cal: 164, protein: 6, carbs: 6, fat: 14, vitamins: ['vitE', 'magnesium'] },
+    { key: 'peanut butter', unit: 'tbsp', per: 2, cal: 190, protein: 8, carbs: 8, fat: 16, vitamins: ['magnesium'] },
+    { key: 'white rice', unit: 'cup', per: 1, cal: 205, protein: 4.3, carbs: 45, fat: 0.4, vitamins: [] },
+    { key: 'brown rice', unit: 'cup', per: 1, cal: 216, protein: 5, carbs: 45, fat: 1.8, vitamins: ['magnesium'] },
+    { key: 'quinoa', unit: 'cup', per: 1, cal: 222, protein: 8, carbs: 39, fat: 3.6, vitamins: ['magnesium', 'folate', 'iron'] },
+    { key: 'oats', unit: 'cup', per: 0.5, cal: 150, protein: 5, carbs: 27, fat: 3, vitamins: ['iron', 'magnesium'] },
+    { key: 'whole wheat toast', unit: 'slice', per: 1, cal: 69, protein: 3.6, carbs: 12, fat: 1, vitamins: [] },
+    { key: 'toast', unit: 'slice', per: 1, cal: 69, protein: 3.6, carbs: 12, fat: 1, vitamins: [] },
+    { key: 'pasta', unit: 'cup', per: 1, cal: 220, protein: 8, carbs: 43, fat: 1.3, vitamins: [] },
+    { key: 'sweet potato', unit: 'each', per: 1, cal: 103, protein: 2.3, carbs: 24, fat: 0.2, vitamins: ['vitA', 'vitC'] },
+    { key: 'potato', unit: 'each', per: 1, cal: 161, protein: 4.3, carbs: 37, fat: 0.2, vitamins: ['vitC', 'potassium'] },
+    { key: 'broccoli', unit: 'cup', per: 1, cal: 55, protein: 3.7, carbs: 11, fat: 0.6, vitamins: ['vitC', 'vitK', 'folate'] },
+    { key: 'spinach', unit: 'cup', per: 1, cal: 41, protein: 5.3, carbs: 6.8, fat: 0.5, vitamins: ['vitA', 'vitK', 'iron', 'folate'] },
+    { key: 'kale', unit: 'cup', per: 1, cal: 33, protein: 2.9, carbs: 6, fat: 0.6, vitamins: ['vitA', 'vitC', 'vitK'] },
+    { key: 'carrot', unit: 'each', per: 1, cal: 25, protein: 0.6, carbs: 6, fat: 0.1, vitamins: ['vitA'] },
+    { key: 'bell pepper', unit: 'each', per: 1, cal: 24, protein: 1, carbs: 6, fat: 0.2, vitamins: ['vitC'] },
+    { key: 'tomato', unit: 'each', per: 1, cal: 22, protein: 1.1, carbs: 4.8, fat: 0.2, vitamins: ['vitC', 'potassium'] },
+    { key: 'banana', unit: 'each', per: 1, cal: 105, protein: 1.3, carbs: 27, fat: 0.4, vitamins: ['potassium', 'vitC'] },
+    { key: 'apple', unit: 'each', per: 1, cal: 95, protein: 0.5, carbs: 25, fat: 0.3, vitamins: ['vitC'] },
+    { key: 'orange', unit: 'each', per: 1, cal: 62, protein: 1.2, carbs: 15, fat: 0.2, vitamins: ['vitC'] },
+    { key: 'blueberries', unit: 'cup', per: 1, cal: 84, protein: 1.1, carbs: 21, fat: 0.5, vitamins: ['vitC', 'vitK'] },
+    { key: 'avocado', unit: 'each', per: 0.5, cal: 160, protein: 2, carbs: 8.5, fat: 15, vitamins: ['vitE', 'potassium', 'folate'] },
+    { key: 'olive oil', unit: 'tbsp', per: 1, cal: 119, protein: 0, carbs: 0, fat: 14, vitamins: ['vitE'] },
+    { key: 'butter', unit: 'tbsp', per: 1, cal: 102, protein: 0.1, carbs: 0, fat: 11.5, vitamins: ['vitA'] }
+  ].sort((a, b) => b.key.length - a.key.length); // longest keys first so "sweet potato" beats "potato"
+
+  const NUMBER_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, half: 0.5 };
+
+  // ============================================================
+  // State
+  // ============================================================
+  let profile = null;
+  let targets = null;
+  let dailyLog = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  let agentsOn = { nutrition: true, workout: true, meal: true, planner: true };
+  let workflowTrace = [];
+  let currentConversation = null;
+  let conversationHistory = [];
+
+  function createConversation(title = 'New conversation') {
+    return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), title, messages: [] };
+  }
+
+  currentConversation = createConversation();
+
+  const AGENTS = {
+    nutrition: { name: 'Nutrition Guide', color: 'nutrition', blurb: 'Works out your daily calorie, protein, and vitamin targets, and answers nutrition questions.' },
+    workout:   { name: 'Workout Guide',   color: 'workout',   blurb: 'Suggests a routine for today and answers exercise questions, aware of what you already do.' },
+    meal:      { name: 'Meal Planner',    color: 'meal',      blurb: 'Estimates a described meal\u2019s nutrition and checks it against what you have left for the day.' },
+    planner:   { name: 'Long-term Planner', color: 'planner', blurb: 'Builds a combined meal-and-workout plan for weeks or months at a time.' }
+  };
+
+  // ============================================================
+  // Calculations
+  // ============================================================
+  function computeTargets(p) {
+    const bmrBySex = {
+      male: 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age + 5,
+      female: 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age - 161
+    };
+    const bmr = p.sex === 'other' ? (bmrBySex.male + bmrBySex.female) / 2 : bmrBySex[p.sex];
+    const tdee = bmr * p.activity;
+
+    // Under 18: growing bodies have different needs than the adult formulas
+    // this app uses, so we don't apply a weight-loss or weight-gain calorie
+    // adjustment — just an estimate of maintenance needs.
+    const isMinor = p.age < 18;
+    const goalAdjust = isMinor ? 0 : GOAL_ADJUST[p.goal];
+    const calories = Math.max(1200, Math.round(tdee + goalAdjust));
+
+    const proteinPerKg = PROTEIN_PER_KG[String(p.activity)] || 1.4;
+    const protein = Math.round(p.weightKg * proteinPerKg);
+    const fatCal = calories * 0.27;
+    const fat = Math.round(fatCal / 9);
+    const proteinCal = protein * 4;
+    const carbCal = Math.max(0, calories - proteinCal - fatCal);
+    const carbs = Math.round(carbCal / 4);
+
+    const rda = RDA[p.sex] || RDA.other;
+
+    return { bmr: Math.round(bmr), tdee: Math.round(tdee), calories, protein, fat, carbs, vitamins: rda, isMinor };
+  }
+
+  // ============================================================
+  // Meal parsing
+  // ============================================================
+  function parseMeal(text) {
+    const lower = text.toLowerCase();
+    const found = [];
+    const usedRanges = [];
+
+    FOOD_DB.forEach(food => {
+      let idx = lower.indexOf(food.key);
+      while (idx !== -1) {
+        const overlaps = usedRanges.some(r => idx < r.end && idx + food.key.length > r.start);
+        if (!overlaps) {
+          const before = lower.slice(Math.max(0, idx - 18), idx);
+          let qty = 1;
+          const numMatch = before.match(/(\d+(\.\d+)?)\s*(g|grams|oz|cup|cups|tbsp|slice|slices)?\s*$/);
+          if (numMatch) {
+            qty = parseFloat(numMatch[1]);
+            if (food.unit === 'g' && (!numMatch[3] || numMatch[3] === 'g' || numMatch[3] === 'grams')) {
+              qty = qty / food.per;
+            } else if (food.unit !== 'g') {
+              qty = qty / food.per;
+            } else {
+              qty = qty / food.per;
+            }
+          } else {
+            const wordMatch = before.trim().split(/\s+/).pop();
+            if (wordMatch && NUMBER_WORDS[wordMatch] !== undefined) {
+              qty = NUMBER_WORDS[wordMatch] / food.per;
+            } else {
+              qty = 1 / food.per;
+            }
+          }
+          found.push({
+            food: food.key, qty,
+            cal: food.cal * qty, protein: food.protein * qty, carbs: food.carbs * qty, fat: food.fat * qty,
+            vitamins: food.vitamins
+          });
+          usedRanges.push({ start: idx, end: idx + food.key.length });
+        }
+        idx = lower.indexOf(food.key, idx + food.key.length);
+      }
+    });
+
+    const totals = found.reduce((acc, f) => {
+      acc.cal += f.cal; acc.protein += f.protein; acc.carbs += f.carbs; acc.fat += f.fat;
+      f.vitamins.forEach(v => acc.vitamins.add(v));
+      return acc;
+    }, { cal: 0, protein: 0, carbs: 0, fat: 0, vitamins: new Set() });
+
+    return { found, totals };
+  }
+
+  function looksLikeMeal(text) {
+    const lower = text.toLowerCase();
+    const mealPhrases = ['i had', "i've had", 'i ate', "i'm eating", 'for breakfast', 'for lunch', 'for dinner', 'for a snack', 'log this meal', 'log my meal', 'i just ate'];
+    const phraseHit = mealPhrases.some(p => lower.includes(p));
+    const foodHits = FOOD_DB.filter(f => lower.includes(f.key)).length;
+    return phraseHit || foodHits >= 1;
+  }
+
+  // ============================================================
+  // Intent routing
+  // ============================================================
+  const NUTRITION_WORDS = ['vitamin', 'mineral', 'protein', 'carb', 'fat', 'calorie', 'nutrient', 'nutrition', 'deficien', 'iron', 'calcium', 'fiber', 'hydrat', 'water intake', 'macro', 'rda', 'daily need', 'diet'];
+  const WORKOUT_WORDS = ['workout', 'exercise', 'routine', 'gym', 'cardio', 'strength', 'reps', 'sets', 'rest day', 'stretch', 'muscle', 'training', 'run', 'lift', 'split', 'squat', 'push up', 'pushup', 'sore'];
+
+  const LONG_TERM_WORDS = ['meal plan', 'workout plan', 'training plan', 'diet plan', 'long term', 'long-term', 'week plan', 'weeks', 'month', 'months', 'program', 'schedule', 'phase', 'cycle', 'for 4 weeks', 'for 6 weeks', 'for 8 weeks'];
+
+  function routeIntents(text) {
+    const lower = text.toLowerCase();
+    const plannerHit = LONG_TERM_WORDS.some(w => lower.includes(w)) || (lower.includes('plan') && (lower.includes('meal') || lower.includes('workout') || lower.includes('training') || lower.includes('diet')));
+    return {
+      nutrition: NUTRITION_WORDS.some(w => lower.includes(w)),
+      workout: WORKOUT_WORDS.some(w => lower.includes(w)),
+      meal: looksLikeMeal(text),
+      planner: plannerHit
+    };
+  }
+
+  // ============================================================
+  // UI: DOM refs
+  // ============================================================
+  const signInOverlay = document.getElementById('signInOverlay');
+  const app = document.getElementById('app');
+  const signInForm = document.getElementById('signInForm');
+  const agentListEl = document.getElementById('agentList');
+  const profileDL = document.getElementById('profileDL');
+  const editProfileBtn = document.getElementById('editProfileBtn');
+  const resetDayBtn = document.getElementById('resetDayBtn');
+  const chatLog = document.getElementById('chatLog');
+  const thinkingLog = document.getElementById('thinkingLog');
+  const thinkingEmpty = document.getElementById('thinkingEmpty');
+  const workflowTraceEl = document.getElementById('workflowTrace');
+  const historyListEl = document.getElementById('historyList');
+  const scrollDownBtn = document.getElementById('scrollDownBtn');
+  const newChatBtn = document.getElementById('newChatBtn');
+  const inputForm = document.getElementById('inputForm');
+  const chatInput = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const calLabel = document.getElementById('calLabel');
+  const calBar = document.getElementById('calBar');
+  const proteinLabel = document.getElementById('proteinLabel');
+  const proteinBar = document.getElementById('proteinBar');
+
+  // ============================================================
+  // Rendering
+  // ============================================================
+  function renderAgentList() {
+    agentListEl.innerHTML = '';
+    Object.keys(AGENTS).forEach(key => {
+      const a = AGENTS[key];
+      const on = agentsOn[key];
+      const card = document.createElement('div');
+      card.className = 'agent-card ' + a.color + ' ' + (on ? 'on' : 'off');
+      card.innerHTML = `
+        <div class="row">
+          <div class="name"><span class="agent-dot"></span><span class="title">${a.name}</span></div>
+          <label class="toggle">
+            <input type="checkbox" data-agent="${key}" ${on ? 'checked' : ''}>
+            <span class="track"></span><span class="thumb"></span>
+          </label>
+        </div>
+        <p>${a.blurb}</p>
+        <div class="status">${on ? '● ACTIVE' : '○ TURNED OFF'}</div>
+      `;
+      agentListEl.appendChild(card);
+    });
+    agentListEl.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const key = cb.dataset.agent;
+        agentsOn[key] = cb.checked;
+        renderAgentList();
+        addThinking('system', 'SYSTEM', (cb.checked ? AGENTS[key].name + ' turned on.' : AGENTS[key].name + ' turned off.'));
+      });
+    });
+  }
+
+  function renderChatHistory() {
+    const entries = conversationHistory.filter(entry => entry.id !== currentConversation.id);
+    if (currentConversation.messages.length) {
+      entries.unshift(currentConversation);
+    }
+
+    historyListEl.innerHTML = '';
+    if (!entries.length) {
+      historyListEl.innerHTML = '<div class="history-empty">No saved chats yet. Start a new conversation to build a history.</div>';
+      return;
+    }
+
+    entries.forEach(entry => {
+      const btn = document.createElement('button');
+      btn.className = 'history-item' + (entry.id === currentConversation.id ? ' active' : '');
+      btn.type = 'button';
+      const preview = entry.messages.find(message => message.text && message.text.trim())?.text || 'Empty conversation';
+      btn.innerHTML = `<div>${entry.title}</div><div class="preview">${preview.slice(0, 80)}${preview.length > 80 ? '…' : ''}</div>`;
+      btn.addEventListener('click', () => {
+        currentConversation = entry;
+        chatLog.innerHTML = '';
+        entry.messages.forEach(message => {
+          const div = document.createElement('div');
+          const cls = message.role === 'user' ? 'msg user' : 'msg agent ' + (message.agentKey || 'system');
+          div.className = cls;
+          const who = message.role === 'user' ? (profile && profile.name ? profile.name : 'You') : (message.agentKey && AGENTS[message.agentKey] ? AGENTS[message.agentKey].name : 'System');
+          div.innerHTML = `<div class="who">${who}</div><div class="bubble"></div>`;
+          div.querySelector('.bubble').textContent = message.text;
+          chatLog.appendChild(div);
+        });
+        chatLog.scrollTop = chatLog.scrollHeight;
+        thinkingLog.innerHTML = '';
+        thinkingEmpty.style.display = 'block';
+        workflowTrace = [];
+        renderWorkflowTrace();
+        renderChatHistory();
+      });
+      historyListEl.appendChild(btn);
+    });
+  }
+
+  function renderProfileSummary() {
+    const heightDisp = profile.heightUnit === 'in' ? Math.round(profile.heightCm / 2.54) + ' in' : Math.round(profile.heightCm) + ' cm';
+    const weightDisp = profile.weightUnit === 'lb' ? Math.round(profile.weightKg * 2.20462) + ' lb' : Math.round(profile.weightKg) + ' kg';
+    profileDL.innerHTML = `
+      <dt>Name</dt><dd>${profile.name || '\u2014'}</dd>
+      <dt>Height</dt><dd>${heightDisp}</dd>
+      <dt>Weight</dt><dd>${weightDisp}</dd>
+      <dt>Age</dt><dd>${profile.age}</dd>
+      <dt>Goal</dt><dd>${profile.goal}</dd>
+      <dt>BMR</dt><dd>${targets.bmr} kcal</dd>
+      <dt>Calorie target</dt><dd>${targets.calories} kcal</dd>
+      <dt>Protein target</dt><dd>${targets.protein} g</dd>
+    `;
+  }
+
+  function renderWorkflowTrace() {
+    if (!workflowTrace.length) {
+      workflowTraceEl.innerHTML = '<div class="workflow-empty">No workflow yet. Send a message and the active agents will run here in sequence.</div>';
+      return;
+    }
+
+    workflowTraceEl.innerHTML = '';
+    workflowTrace.forEach((step, index) => {
+      const row = document.createElement('div');
+      row.className = 'workflow-step ' + step.status;
+      row.innerHTML = `
+        <div class="step-head">
+          <span>${index + 1}. ${step.label}</span>
+          <span class="step-status">${step.status}</span>
+        </div>
+        <div class="step-meta">${step.detail}</div>
+      `;
+      workflowTraceEl.appendChild(row);
+    });
+  }
+
+  function renderProgress() {
+    const calPct = Math.min(100, Math.round((dailyLog.calories / targets.calories) * 100));
+    const proteinPct = Math.min(100, Math.round((dailyLog.protein / targets.protein) * 100));
+    calLabel.textContent = Math.round(dailyLog.calories) + ' / ' + targets.calories;
+    calBar.style.width = calPct + '%';
+    proteinLabel.textContent = Math.round(dailyLog.protein) + 'g / ' + targets.protein + 'g';
+    proteinBar.style.width = proteinPct + '%';
+  }
+
+  function updateScrollDownButton() {
+    if (!chatLog) return;
+    const nearBottom = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 60;
+    scrollDownBtn.classList.toggle('visible', !nearBottom);
+  }
+
+  function scrollChatToBottom(smooth = false) {
+    if (!chatLog) return;
+    chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    updateScrollDownButton();
+  }
+
+  function addChatMessage(role, agentKey, text) {
+    const entry = { role, agentKey, text };
+    currentConversation.messages.push(entry);
+
+    if (role === 'user' && currentConversation.title === 'New conversation') {
+      const shortTitle = text.trim().replace(/\s+/g, ' ').slice(0, 40);
+      currentConversation.title = shortTitle || 'New conversation';
+    }
+
+    const div = document.createElement('div');
+    const cls = role === 'user' ? 'msg user' : 'msg agent ' + (agentKey || 'system');
+    div.className = cls;
+    const who = role === 'user' ? (profile && profile.name ? profile.name : 'You') : (agentKey && AGENTS[agentKey] ? AGENTS[agentKey].name : 'System');
+    div.innerHTML = `<div class="who">${who}</div><div class="bubble"></div>`;
+    div.querySelector('.bubble').textContent = text;
+    chatLog.appendChild(div);
+    scrollChatToBottom(false);
+    renderChatHistory();
+  }
+
+  function addThinking(agentKey, tagLabel, text) {
+    thinkingEmpty.style.display = 'none';
+    const div = document.createElement('div');
+    div.className = 'think-entry ' + (agentKey || 'system');
+    div.innerHTML = `<span class="tag">${tagLabel}</span>${text}`;
+    thinkingLog.appendChild(div);
+    thinkingLog.scrollTop = thinkingLog.scrollHeight;
+  }
+
+  function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+  // ============================================================
+  // Agent response builders
+  // ============================================================
+  function parsePlanLength(text) {
+    const match = text.match(/(\d+)\s*(week|weeks|month|months)/i);
+    if (!match) return null;
+    const qty = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+    return unit.startsWith('month') ? qty * 4 : qty;
+  }
+
+  function buildLongTermPlan(text) {
+    const weeks = parsePlanLength(text) || 6;
+    const goalLabel = profile.goal === 'gain' ? 'muscle gain' : profile.goal === 'lose' ? 'fat loss' : 'maintenance';
+    const workoutFocus = profile.goal === 'gain'
+      ? '4 strength sessions per week with one lighter conditioning day.'
+      : profile.goal === 'lose'
+        ? '3 strength sessions and 2 cardio sessions per week.'
+        : '3 strength sessions and 1 light cardio session per week.';
+    const mealFrame = `Aim for roughly ${targets.calories} kcal/day and ${targets.protein}g protein/day. Use 3 meals plus 1 protein-rich snack, with vegetables at lunch and dinner and smart carbs around training.`;
+    const weeklyRhythm = profile.goal === 'gain'
+      ? 'Mon/Tue/Thu/Sat strength, Wed mobility, Sun rest.'
+      : profile.goal === 'lose'
+        ? 'Mon/Wed/Fri strength, Tue/Thu cardio, Sat walk, Sun rest.'
+        : 'Mon/Wed/Fri strength, Tue mobility, Thu light cardio, Sat walk, Sun rest.';
+
+    return `Here’s a ${weeks}-week ${goalLabel} plan that combines meals and training:\n\n- Nutrition: ${mealFrame}\n- Workout: ${workoutFocus}\n- Weekly rhythm: ${weeklyRhythm}\n- Progression: add a little weight or a rep each week, but keep form clean and recovery solid.\n- Structure: Weeks 1–2 build consistency, Weeks 3–4 increase volume slightly, Weeks 5+ keep the same template and adjust only if recovery feels good.`;
+  }
+
+  async function runPlannerAgent(text, previousOutput) {
+    const tagPrefix = 'PLANNER → ';
+    addThinking('planner', tagPrefix + 'parse', 'Building a combined meal-and-workout plan for the requested duration...');
+    if (previousOutput) {
+      addThinking('planner', tagPrefix + 'handoff', 'Received the previous step result as context: ' + previousOutput.slice(0, 140));
+    }
+    await wait(320);
+    const reply = buildLongTermPlan(text);
+    addThinking('planner', tagPrefix + 'answer', 'Created a multi-week meal and workout framework from your profile and goal.');
+    return reply;
+  }
+
+  async function runNutritionAgent(text, previousOutput) {
+    const tagPrefix = 'NUTRITION → ';
+    addThinking('nutrition', tagPrefix + 'parse', 'Scanning for nutrition keywords (protein, vitamins, calories, minerals)...');
+    await wait(280);
+    addThinking('nutrition', tagPrefix + 'lookup', 'Pulling your computed targets from profile (BMR ' + targets.bmr + ' kcal → ' + targets.calories + ' kcal/day goal).');
+    await wait(280);
+
+    const lower = text.toLowerCase();
+    let reply;
+
+    if (lower.includes('protein')) {
+      const remaining = Math.max(0, targets.protein - dailyLog.protein);
+      reply = `Your protein target is about ${targets.protein}g/day, based on your weight and activity level. You've logged ${Math.round(dailyLog.protein)}g so far today, leaving roughly ${Math.round(remaining)}g. A practical target is to spread protein across 3–4 eating occasions, and good sources include chicken breast, eggs, Greek yogurt, tofu, lentils, and fish. If you want, send me a meal and I can tell you whether it helps close the gap.`;
+    } else if (lower.includes('vitamin') || lower.includes('missing') || lower.includes('deficien')) {
+      const lines = Object.keys(targets.vitamins).map(k => `${VITAMIN_LABELS[k]}: ${targets.vitamins[k]}${VITAMIN_UNITS[k]}/day`).join('\n');
+      reply = `Here are your daily reference targets (general adult RDAs, not a lab result):\n${lines}\n\nFor a simple way to cover more of them, try pairing protein with fruit or vegetables at meals, and include a variety of colors across the day. Log a few meals with the Meal Planner and I can point out which of these you're likely falling short on.`;
+    } else if (lower.includes('calorie')) {
+      if (targets.isMinor) {
+        reply = `Your estimated maintenance need is about ${targets.calories} kcal/day (BMR ${targets.bmr} kcal × activity). I'm not applying a "${profile.goal}" adjustment on top of that — growing teenagers need a consistent supply of energy and nutrients, and cutting or adding calories on purpose is something to do with a parent/guardian and a doctor or registered dietitian involved, not by following an app. You've logged about ${Math.round(dailyLog.calories)} kcal today, so the next step is to keep meals regular and make sure breakfast, lunch, dinner, and snacks all include enough energy and protein.`;
+      } else {
+        reply = `Your estimated daily target is ${targets.calories} kcal (BMR ${targets.bmr} kcal × activity, adjusted for your "${profile.goal}" goal). You've logged about ${Math.round(dailyLog.calories)} kcal today, which gives you a useful baseline for the rest of the day. If you want, I can help you decide whether your current meals are too light, too heavy, or roughly on target.`;
+      }
+    } else if (lower.includes('water') || lower.includes('hydrat')) {
+      reply = `A common rule of thumb is about 30–35 ml of water per kg of body weight per day — for you that's roughly ${Math.round(profile.weightKg * 32)} ml (~${(profile.weightKg * 32 / 1000).toFixed(1)} L). Needs go up with exercise and heat, so treat this as a floor, not a ceiling. A simple habit is to drink a glass with each meal and one after training.`;
+    } else if (lower.includes('fat')) {
+      reply = `Your estimated fat target is about ${targets.fat}g/day (roughly 27% of your calorie target). Favor unsaturated sources — olive oil, avocado, nuts, fatty fish, and seeds. If you're trying to keep your meals balanced, a bit of fat with protein and vegetables usually makes the meal feel more satisfying.`;
+    } else if (lower.includes('carb')) {
+      reply = `Your estimated carb target is about ${targets.carbs}g/day — whatever's left after protein and fat are accounted for. Whole grains, fruit, and vegetables are the higher-fiber way to hit that. A good approach is to pair a carb source with protein so meals feel more stable and less likely to leave you hungry.`;
+    } else {
+      reply = `Day-at-a-glance: ${targets.calories} kcal, ${targets.protein}g protein, ${targets.carbs}g carbs, and ${targets.fat}g fat. That gives you a useful nutrition baseline for the day. The most helpful next step is to tell me about a meal you ate or ask me a specific nutrient question, and I can give you a more targeted breakdown.`;
+    }
+
+    addThinking('nutrition', tagPrefix + 'answer', 'Formulated response from computed targets — no external lookup needed.');
+    return reply;
+  }
+
+  async function runWorkoutAgent(text, previousOutput) {
+    const tagPrefix = 'WORKOUT → ';
+    addThinking('workout', tagPrefix + 'parse', 'Scanning for exercise-related intent...');
+    await wait(280);
+    addThinking('workout', tagPrefix + 'context', 'Cross-referencing your stated routine: "' + (profile.routine || 'none given') + '"');
+    await wait(280);
+
+    const SPLIT = ['Rest / light walk', 'Push — chest, shoulders, triceps', 'Pull — back, biceps', 'Legs — squat pattern + hinge', 'Full body / mixed', 'Cardio or conditioning', 'Rest / mobility work'];
+    const today = SPLIT[new Date().getDay()];
+    const lower = text.toLowerCase();
+    let reply;
+
+    if (lower.includes('today') || lower.includes('routine') && !lower.includes('current')) {
+      reply = `Suggested focus for today: ${today}. That's a generic rotating split — shift it around your own routine ("${profile.routine || 'none on file'}") rather than treating it as fixed. If you trained this muscle group in the last 48 hours, swap in a lighter day instead. A simple version of this plan is to keep the workout short and consistent, then add a little volume only if your recovery feels good.`;
+    } else if (lower.includes('rest')) {
+      reply = `Rest days matter as much as training days — muscle actually rebuilds during recovery. Aim for at least 1–2 full rest or active-recovery days a week, more if you're sore or new to training. On those days, light walking, mobility, or a gentle stretch is often enough to support recovery without feeling like a full workout.`;
+    } else if (lower.includes('sore')) {
+      reply = `Soreness 24–48 hours after training (DOMS) is normal. Light movement, hydration, and protein help. Sharp or joint pain is different — that's worth backing off and, if it persists, checking with a professional. If the soreness is mild, keep the movement easy and focus on recovery instead of pushing through it.`;
+    } else if (lower.includes('cardio')) {
+      reply = `For general health, aim for roughly 150 minutes/week of moderate cardio (or ~75 minutes vigorous) — that's a well-established public health guideline, not a strict rule. Split it however fits your schedule, and a brisk walk, bike ride, or easy jog are all perfectly reasonable choices.`;
+    } else if (lower.includes('beginner') || lower.includes('start')) {
+      reply = `If you're just starting out: 2–3 full-body strength sessions a week, focused on a handful of compound movements (squat, hinge, push, pull, carry), is a solid base. Add cardio and specialization once that's routine. The goal at first is consistency and good form, not pushing to failure.`;
+    } else {
+      reply = `Today's suggested focus is: ${today}. That gives you a simple structure for the day without being overly rigid. Ask me about a muscle group, rest days, or cardio guidelines and I'll go into more detail, and I can also help you adapt it to your current routine if you tell me what you usually do.`;
+    }
+
+    addThinking('workout', tagPrefix + 'answer', 'Built response from day-based split + your stated routine.');
+    return reply;
+  }
+
+  async function runMealAgent(text, previousOutput) {
+    const tagPrefix = 'MEAL → ';
+    addThinking('meal', tagPrefix + 'parse', 'Scanning the message for recognizable foods and quantities...');
+    await wait(300);
+
+    const { found, totals } = parseMeal(text);
+
+    if (found.length === 0) {
+      addThinking('meal', tagPrefix + 'result', 'No foods matched the reference database.');
+      return `I couldn't confidently identify any foods in that — try naming things more directly, like "grilled chicken breast, rice, and broccoli."`;
+    }
+
+    addThinking('meal', tagPrefix + 'matched', found.map(f => f.food).join(', '));
+    await wait(280);
+    addThinking('meal', tagPrefix + 'estimate', `~${Math.round(totals.cal)} kcal, ${totals.protein.toFixed(1)}g protein, ${totals.carbs.toFixed(1)}g carbs, ${totals.fat.toFixed(1)}g fat`);
+    await wait(280);
+
+    dailyLog.calories += totals.cal;
+    dailyLog.protein += totals.protein;
+    dailyLog.carbs += totals.carbs;
+    dailyLog.fat += totals.fat;
+    renderProgress();
+
+    const remainingProtein = Math.max(0, targets.protein - (dailyLog.protein - totals.protein));
+    const proteinShare = remainingProtein > 0 ? Math.round((totals.protein / remainingProtein) * 100) : 100;
+
+    const coveredVitamins = Array.from(totals.vitamins).map(v => VITAMIN_LABELS[v]);
+    const missingHighlights = Object.keys(VITAMIN_LABELS).filter(v => !totals.vitamins.has(v));
+    const notableGaps = ['vitC', 'vitA', 'iron', 'calcium'].filter(v => missingHighlights.includes(v)).map(v => VITAMIN_LABELS[v]);
+
+    addThinking('meal', tagPrefix + 'compare', `Checked against remaining daily target (~${Math.round(remainingProtein)}g protein left before this meal).`);
+
+    let verdict = `This meal is roughly ${Math.round(totals.cal)} kcal with ${totals.protein.toFixed(1)}g protein, ${totals.carbs.toFixed(1)}g carbs, and ${totals.fat.toFixed(1)}g fat (estimates, not exact). `;
+    verdict += `That covers about ${proteinShare}% of your remaining protein for today, so it should be helpful for reaching your daily target. `;
+    if (coveredVitamins.length > 0) {
+      verdict += `Good source of: ${coveredVitamins.join(', ')}. `;
+    }
+    if (notableGaps.length > 0) {
+      verdict += `Light on: ${notableGaps.join(', ')} — worth adding a source of one of those later today. If you want a better-balanced plate, try adding a fruit or vegetable alongside the protein and starch. `;
+    } else {
+      verdict += `Solid spread across the nutrients I track, and it looks like a generally balanced meal. `;
+    }
+    verdict += `If you share a couple more meals, I can compare the full day and tell you whether you're trending close to your target or need a tweak.`;
+
+    addThinking('meal', tagPrefix + 'answer', 'Logged to today’s running total and returned a verdict.');
+    return verdict;
+  }
+
+  // ============================================================
+  // Message handling
+  // ============================================================
+  async function handleUserMessage(text) {
+    addChatMessage('user', null, text);
+    sendBtn.disabled = true;
+
+    const intents = routeIntents(text);
+    const relevantKeys = Object.keys(intents).filter(k => intents[k]);
+
+    if (relevantKeys.length === 0) {
+      addThinking('system', 'SYSTEM', 'No agent matched this message confidently.');
+      addChatMessage('agent', 'system', `I couldn't tell which agent should handle that. Try asking about nutrition, your workout, or describe a meal you ate.`);
+      sendBtn.disabled = false;
+      return;
+    }
+
+    const disabledMatches = relevantKeys.filter(k => !agentsOn[k]);
+    disabledMatches.forEach(k => addThinking(k, AGENTS[k].name.toUpperCase() + ' \u2192 skipped', 'This agent is turned off \u2014 not responding.'));
+
+    const activeMatches = ['planner', 'nutrition', 'workout', 'meal'].filter(k => {
+      const relevant = k === 'planner' ? intents.planner : intents[k];
+      return relevant && agentsOn[k];
+    });
+
+    if (activeMatches.length === 0) {
+      addChatMessage('agent', 'system', `That looked like a question for ${disabledMatches.map(k => AGENTS[k].name).join(' / ')}, but ${disabledMatches.length > 1 ? "they're" : "it's"} turned off right now. Flip the switch on the right to turn it back on.`);
+      sendBtn.disabled = false;
+      return;
+    }
+
+    workflowTrace = [];
+    workflowTrace.push({
+      label: 'Orchestrator',
+      detail: 'Checking active agents and running them in sequence.',
+      status: 'running'
+    });
+    renderWorkflowTrace();
+
+    let handoff = text;
+    let previousOutput = '';
+
+    for (const key of activeMatches) {
+      workflowTrace.push({
+        label: AGENTS[key].name,
+        detail: workflowTrace.length === 1 ? 'Received the original request.' : 'Received the previous agent output as context.',
+        status: 'running'
+      });
+      renderWorkflowTrace();
+
+      let reply;
+      if (key === 'planner') reply = await runPlannerAgent(handoff, previousOutput);
+      else if (key === 'nutrition') reply = await runNutritionAgent(handoff, previousOutput);
+      else if (key === 'workout') reply = await runWorkoutAgent(handoff, previousOutput);
+      else if (key === 'meal') reply = await runMealAgent(handoff, previousOutput);
+
+      workflowTrace[workflowTrace.length - 1].status = 'done';
+      workflowTrace[workflowTrace.length - 1].detail = reply.length > 120 ? reply.slice(0, 117) + '…' : reply;
+      renderWorkflowTrace();
+
+      addChatMessage('agent', key, reply);
+      previousOutput = reply;
+      handoff = reply;
+    }
+
+    workflowTrace[0].status = 'done';
+    workflowTrace[0].detail = 'Completed the workflow for ' + activeMatches.map(k => AGENTS[k].name).join(' → ');
+    renderWorkflowTrace();
+
+    sendBtn.disabled = false;
+  }
+
+  function startNewConversation() {
+    if (currentConversation.messages.length > 0) {
+      conversationHistory = [{
+        id: currentConversation.id,
+        title: currentConversation.title || 'New conversation',
+        messages: currentConversation.messages.slice()
+      }, ...conversationHistory.filter(entry => entry.id !== currentConversation.id)];
+    }
+
+    currentConversation = createConversation('New conversation');
+    chatLog.innerHTML = '';
+    thinkingLog.innerHTML = '';
+    thinkingEmpty.style.display = 'block';
+    workflowTrace = [];
+    renderWorkflowTrace();
+    renderChatHistory();
+    scrollChatToBottom(false);
+  }
+
+  // ============================================================
+  // Sign-in
+  // ============================================================
+  const signInError = document.getElementById('signInError');
+
+  signInForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    signInError.classList.remove('show');
+
+    try {
+      const heightRaw = parseFloat(document.getElementById('fHeight').value);
+      const weightRaw = parseFloat(document.getElementById('fWeight').value);
+      const heightUnit = document.getElementById('fHeightUnit').value;
+      const weightUnit = document.getElementById('fWeightUnit').value;
+      const age = parseInt(document.getElementById('fAge').value, 10);
+
+      if (!heightRaw || heightRaw <= 0 || !weightRaw || weightRaw <= 0 || !age || age <= 0) {
+        signInError.textContent = 'Height, weight, and age are needed (as numbers greater than 0) to calculate your targets.';
+        signInError.classList.add('show');
+        return;
+      }
+
+      profile = {
+        name: document.getElementById('fName').value.trim(),
+        sex: document.getElementById('fSex').value,
+        age,
+        activity: parseFloat(document.getElementById('fActivity').value),
+        heightCm: heightUnit === 'in' ? heightRaw * 2.54 : heightRaw,
+        heightUnit,
+        weightKg: weightUnit === 'lb' ? weightRaw * 0.453592 : weightRaw,
+        weightUnit,
+        goal: document.getElementById('fGoal').value,
+        routine: document.getElementById('fRoutine').value.trim()
+      };
+
+      targets = computeTargets(profile);
+      renderAgentList();
+      renderProfileSummary();
+      renderProgress();
+
+      signInOverlay.style.display = 'none';
+      app.classList.add('show');
+
+      addThinking('system', 'SYSTEM', 'Profile received. Targets computed: ' + targets.calories + ' kcal, ' + targets.protein + 'g protein/day.' + (targets.isMinor ? ' Age under 18 \u2014 no calorie deficit/surplus applied.' : ''));
+      let welcome = `Welcome${profile.name ? ', ' + profile.name : ''}. Your targets are set up on the right. Ask a question, or try one of the suggestions below.`;
+      if (targets.isMinor) {
+        welcome += `\n\nOne note: since you're under 18, I'm only estimating maintenance calories \u2014 I'm not applying a weight-loss or weight-gain adjustment. Nutrition needs during growth are something to work out with a parent/guardian and a doctor or registered dietitian, not an app.`;
+      }
+      addChatMessage('agent', 'system', welcome);
+    } catch (err) {
+      signInError.textContent = 'Something went wrong setting up your profile: ' + err.message;
+      signInError.classList.add('show');
+      console.error(err);
+    }
+  });
+
+  editProfileBtn.addEventListener('click', () => {
+    signInOverlay.style.display = 'flex';
+  });
+
+  resetDayBtn.addEventListener('click', () => {
+    dailyLog = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    renderProgress();
+    addThinking('system', 'SYSTEM', "Today's log cleared.");
+  });
+
+  // ============================================================
+  // Input handlers
+  // ============================================================
+  inputForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = chatInput.value.trim();
+    if (!text) return;
+    chatInput.value = '';
+    handleUserMessage(text);
+  });
+
+  chatLog.addEventListener('scroll', updateScrollDownButton);
+  scrollDownBtn.addEventListener('click', () => scrollChatToBottom(true));
+  newChatBtn.addEventListener('click', startNewConversation);
+
+  document.querySelectorAll('.suggest-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      handleUserMessage(chip.dataset.q);
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
